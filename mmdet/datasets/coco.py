@@ -15,42 +15,44 @@ class CocoDataset(BaseDetDataset):
     """Dataset for COCO."""
 
     METAINFO = {
+        # classes is the category names
         'classes':
-        ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train',
-         'truck', 'boat', 'traffic light', 'fire hydrant', 'stop sign',
-         'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep',
-         'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 'umbrella',
-         'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard',
-         'sports ball', 'kite', 'baseball bat', 'baseball glove', 'skateboard',
-         'surfboard', 'tennis racket', 'bottle', 'wine glass', 'cup', 'fork',
-         'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich', 'orange',
-         'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair',
-         'couch', 'potted plant', 'bed', 'dining table', 'toilet', 'tv',
-         'laptop', 'mouse', 'remote', 'keyboard', 'cell phone', 'microwave',
-         'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
-         'scissors', 'teddy bear', 'hair drier', 'toothbrush'),
+        ('airplane', 'bird', 'cat', 'dog', 'person', 'bus', 'smallcar', 'suv', 'bowl', 'food'),
+
+        # base_classes is the classify names 
+        'base_classes':
+        ('airplane', 'bird', 'cat', 'dog', 'person', 'car','eat'),
+
+        # detection_classes is the class names which need to be detected
+        'detection_classes':
+        ('car',),
+
+        # segmentation_classes is the class names which need to be segmanted
+        'segmentation_classes':
+        ('eat',),
+
         # palette is a list of color tuples, which is used for visualization.
         'palette':
         [(220, 20, 60), (119, 11, 32), (0, 0, 142), (0, 0, 230), (106, 0, 228),
-         (0, 60, 100), (0, 80, 100), (0, 0, 70), (0, 0, 192), (250, 170, 30),
-         (100, 170, 30), (220, 220, 0), (175, 116, 175), (250, 0, 30),
-         (165, 42, 42), (255, 77, 255), (0, 226, 252), (182, 182, 255),
-         (0, 82, 0), (120, 166, 157), (110, 76, 0), (174, 57, 255),
-         (199, 100, 0), (72, 0, 118), (255, 179, 240), (0, 125, 92),
-         (209, 0, 151), (188, 208, 182), (0, 220, 176), (255, 99, 164),
-         (92, 0, 73), (133, 129, 255), (78, 180, 255), (0, 228, 0),
-         (174, 255, 243), (45, 89, 255), (134, 134, 103), (145, 148, 174),
-         (255, 208, 186), (197, 226, 255), (171, 134, 1), (109, 63, 54),
-         (207, 138, 255), (151, 0, 95), (9, 80, 61), (84, 105, 51),
-         (74, 65, 105), (166, 196, 102), (208, 195, 210), (255, 109, 65),
-         (0, 143, 149), (179, 0, 194), (209, 99, 106), (5, 121, 0),
-         (227, 255, 205), (147, 186, 208), (153, 69, 1), (3, 95, 161),
-         (163, 255, 0), (119, 0, 170), (0, 182, 199), (0, 165, 120),
-         (183, 130, 88), (95, 32, 0), (130, 114, 135), (110, 129, 133),
-         (166, 74, 118), (219, 142, 185), (79, 210, 114), (178, 90, 62),
-         (65, 70, 15), (127, 167, 115), (59, 105, 106), (142, 108, 45),
-         (196, 172, 0), (95, 54, 80), (128, 76, 255), (201, 57, 1),
-         (246, 0, 122), (191, 162, 208)]
+         (0, 60, 100), (0, 80, 100), (0, 0, 70), (0, 0, 192), (250, 170, 30)]
+         # (100, 170, 30), (220, 220, 0), (175, 116, 175), (250, 0, 30),
+         # (165, 42, 42), (255, 77, 255), (0, 226, 252), (182, 182, 255),
+         # (0, 82, 0), (120, 166, 157), (110, 76, 0), (174, 57, 255),
+         # (199, 100, 0), (72, 0, 118), (255, 179, 240), (0, 125, 92),
+         # (209, 0, 151), (188, 208, 182), (0, 220, 176), (255, 99, 164),
+         # (92, 0, 73), (133, 129, 255), (78, 180, 255), (0, 228, 0),
+         # (174, 255, 243), (45, 89, 255), (134, 134, 103), (145, 148, 174),
+         # (255, 208, 186), (197, 226, 255), (171, 134, 1), (109, 63, 54),
+         # (207, 138, 255), (151, 0, 95), (9, 80, 61), (84, 105, 51),
+         # (74, 65, 105), (166, 196, 102), (208, 195, 210), (255, 109, 65),
+         # (0, 143, 149), (179, 0, 194), (209, 99, 106), (5, 121, 0),
+         # (227, 255, 205), (147, 186, 208), (153, 69, 1), (3, 95, 161),
+         # (163, 255, 0), (119, 0, 170), (0, 182, 199), (0, 165, 120),
+         # (183, 130, 88), (95, 32, 0), (130, 114, 135), (110, 129, 133),
+         # (166, 74, 118), (219, 142, 185), (79, 210, 114), (178, 90, 62),
+         # (65, 70, 15), (127, 167, 115), (59, 105, 106), (142, 108, 45),
+         # (196, 172, 0), (95, 54, 80), (128, 76, 255), (201, 57, 1),
+         # (246, 0, 122), (191, 162, 208)]
     }
     COCOAPI = COCO
     # ann_id is unique in coco dataset.
@@ -89,7 +91,7 @@ class CocoDataset(BaseDetDataset):
                 'raw_img_info':
                 raw_img_info
             })
-            data_list.append(parsed_data_info)
+            data_list.extend(parsed_data_info)
         if self.ANN_ID_UNIQUE:
             assert len(set(total_ann_ids)) == len(
                 total_ann_ids
@@ -126,6 +128,8 @@ class CocoDataset(BaseDetDataset):
         data_info['seg_map_path'] = seg_map_path
         data_info['height'] = img_info['height']
         data_info['width'] = img_info['width']
+        data_info['is_detected_image'] = False
+        data_info['is_segmented_image'] = False
 
         if self.return_classes:
             data_info['text'] = self.metainfo['classes']
@@ -133,8 +137,18 @@ class CocoDataset(BaseDetDataset):
             data_info['custom_entities'] = True
 
         instances = []
+        class_instances = []
+        ret_data_info = []
         for i, ann in enumerate(ann_info):
             instance = {}
+            if ann['shape_type'] == 'rectangle':
+                data_info['is_detected_image'] = True
+                data_info['shape_type'] = ann['shape_type']
+            elif ann['shape_type'] == 'polygon':
+                data_info['is_detected_image'] = True
+                data_info['is_segmented_image'] = True
+                data_info['shape_type'] = ann['shape_type']
+            data_info['class_id'] = ann['class_id']
 
             if ann.get('ignore', False):
                 continue
@@ -159,9 +173,23 @@ class CocoDataset(BaseDetDataset):
             if ann.get('segmentation', None):
                 instance['mask'] = ann['segmentation']
 
-            instances.append(instance)
-        data_info['instances'] = instances
-        return data_info
+            if ann['shape_type'] == 'null':
+                class_instances.append(instance)
+            else:
+                instances.append(instance)
+
+        if len(instances) > 0:
+            data_info['instances'] = instances
+            ret_data_info.append(data_info)
+
+        if len(class_instances) > 0:
+            class_data_info = copy.deepcopy(data_info)
+            class_data_info['is_detected_image'] = False
+            class_data_info['is_segmented_image'] = False
+            class_data_info['instances'] = class_instances
+            ret_data_info.append(class_data_info)
+
+        return ret_data_info
 
     def filter_data(self) -> List[dict]:
         """Filter annotations according to filter_cfg.
