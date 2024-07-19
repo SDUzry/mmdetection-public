@@ -725,7 +725,11 @@ class SwinTransformer(BaseModule):
             ]
             for table_key in relative_position_bias_table_keys:
                 table_pretrained = state_dict[table_key]
-                table_current = self.state_dict()[table_key]
+                if 'backbone.' in table_key:
+                    table_key_c = table_key.replace('backbone.','')
+                    table_current = self.state_dict()[table_key_c]
+                else:
+                    table_current = self.state_dict()[table_key]
                 L1, nH1 = table_pretrained.size()
                 L2, nH2 = table_current.size()
                 if nH1 != nH2:
