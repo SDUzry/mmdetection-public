@@ -70,7 +70,7 @@ class CocoMetric(BaseMetric):
     def __init__(self,
                  ann_file: Optional[str] = None,
                  metric: Union[str, List[str]] = 'bbox',
-                 classwise: bool = False,
+                 classwise: bool = True,
                  proposal_nums: Sequence[int] = (100, 300, 1000),
                  iou_thrs: Optional[Union[float, Sequence[float]]] = None,
                  metric_items: Optional[Sequence[str]] = None,
@@ -360,6 +360,7 @@ class CocoMetric(BaseMetric):
             result['bboxes'] = pred['bboxes'].cpu().numpy()
             result['scores'] = pred['scores'].cpu().numpy()
             result['labels'] = pred['labels'].cpu().numpy()
+            result['pre_class_id'] = data_sample.get('pre_class_ids', 1)
             # encode mask to RLE
             if 'masks' in pred:
                 result['masks'] = encode_mask_results(
@@ -374,6 +375,11 @@ class CocoMetric(BaseMetric):
             gt['width'] = data_sample['ori_shape'][1]
             gt['height'] = data_sample['ori_shape'][0]
             gt['img_id'] = data_sample['img_id']
+            gt['class_id'] = data_sample['class_id']
+            if data_sample.get('shape_type'):
+                gt['shape_type'] = data_sample['shape_type']
+            else:
+                gt['shape_type'] = 'null'
             if self._coco_api is None:
                 # TODO: Need to refactor to support LoadAnnotations
                 assert 'instances' in data_sample, \
@@ -394,9 +400,44 @@ class CocoMetric(BaseMetric):
             the metrics, and the values are corresponding results.
         """
         logger: MMLogger = MMLogger.get_current_instance()
-
         # split gt and prediction list
         gts, preds = zip(*results)
+        # 计算分类的准确率
+        logger.info('...... computing classify accuracy .......')
+        # acc-top1,5
+        correct1 = 0
+        correct5 = 0
+        # 判断是否需要进行分类的验证，如果获得的类型为int则跳过
+        is_class = True
+        # 获取大类个数
+        class_name = self.dataset_meta['base_classes']
+        class_max = len(class_name)
+        # 创建二维列表作为混淆矩阵
+        matrix=[[0 for i in range(class_max)]for j in range(class_max)]
+
+        for gt, dt in zip(gts, preds):
+            if type(dt['pre_class_id']).__name__=='int':
+                #非分类任务跳过计算分类准确率
+                is_class = False
+                logger.info('...... skip computing classify accuracy .......')
+                break
+            # 更新混淆矩阵
+            matrix[gt['class_id']-1][dt['pre_class_id'][0]] += 1
+            if (gt['class_id']-1) == dt['pre_class_id'][0]:
+                correct1 += 1
+            if (gt['class_id']-1) in dt['pre_class_id'][0:5]:
+                correct5 +=1
+
+        if is_class:
+            acc_top1 = correct1/len(gts)
+            acc_top5 = correct5/len(gts)
+            for index, list_ in enumerate(matrix):
+                class_sum = sum(list_)
+                logger.info(str(list_)+" "+str(class_name[index]))
+
+            logger.info({'-------------accuracy_top1--------------': acc_top1})
+            logger.info({'-------------accuracy_top5--------------': acc_top5})
+
 
         tmp_dir = None
         if self.outfile_prefix is None:
@@ -471,8 +512,83 @@ class CocoMetric(BaseMetric):
             else:
                 coco_eval = COCOeval(self._coco_api, coco_dt, iou_type)
 
-            coco_eval.params.catIds = self.cat_ids
-            coco_eval.params.imgIds = self.img_ids
+
+            gt_image_id = []
+            category_ids = []
+            # 目标检测传入图像ID，类别ID
+            if metric == 'bbox':
+                for i in gts:
+                    if i['shape_type'] == 'rectangle':
+                        gt_image_id.append(i['img_id'])
+                for img_id in gt_image_id:
+                    for cat_id in self._coco_api.catToImgs:
+                        if img_id in self._coco_api.catToImgs[cat_id]:
+                            category_ids.append(cat_id)
+            # 分割传入图像ID，类别ID
+            else:
+                for i in gts:
+                    if i['shape_type'] == 'polygon':
+                        gt_image_id.append(i['img_id'])
+                for img_id in gt_image_id:
+                    for cat_id in self._coco_api.catToImgs:
+                        if img_id in self._coco_api.catToImgs[cat_id]:
+                            category_ids.append(cat_id)
+            # 去重+排序
+            category_ids = list(set(category_ids))
+            category_ids.sort()
+            # 纯目标检测使用默认category_ids即可
+            if is_class == False:
+                category_ids = self.cat_ids
+            # # 取出所有gt（map）
+            # bbox_gt_all = self._coco_api.img_ann_map
+            # bbox_gt = list()
+            # # 筛选出在gt_image_id中的gt
+            # # list[list[dict]]
+            # for l in bbox_gt_all:
+            #     if bbox_gt_all[l][0]['image_id'] in gt_image_id:
+            #         bbox_gt.append(bbox_gt_all[l])
+            #
+            # bbox_dt = list()
+            # # 筛选出在gt_image_id中的dt
+            # # list[dict]
+            # for t in preds:
+            #     if t['img_id'] in gt_image_id:
+            #         bbox_dt.append(t)
+            # correct_detection = 0
+            # for i in range(len(gt_image_id)):
+            #     # 取出gt与dt的labels列表
+            #     labels_gt = list()
+            #     labels_dt = list()
+            #     for index_dt, s in enumerate(bbox_dt[i]['scores']):
+            #         # 得分阈值
+            #         if s >= 0.5 :
+            #             labels_dt.append(bbox_dt[i]['labels'][index_dt]+1)
+            #         else:
+            #             break
+            #     for anns in bbox_gt[i]:
+            #         labels_gt.append(anns['category_id'])
+            #
+            #     gt_nums = len(labels_gt)
+            #     correct_per_img = 0
+            #     # 计算gt中的labels出现在dt中的数量
+            #     for lg in labels_gt:
+            #         # 匹配框的类别，匹配到的置为-1
+            #         for i, ld in enumerate(labels_dt):
+            #             if ld == lg:
+            #                 labels_dt[i] = -1
+            #                 correct_per_img += 1
+            #                 break
+            #
+            #     correct_detection += (correct_per_img/gt_nums)
+            #
+            #
+            # # 按框的acc(无视IOU)
+            # detection_acc = correct_detection / len(gt_image_id)
+            # logger.info({'----------detection_bbox_acc------------------':detection_acc})
+
+
+            coco_eval.params.catIds = category_ids
+            coco_eval.params.imgIds = gt_image_id
             coco_eval.params.maxDets = list(self.proposal_nums)
             coco_eval.params.iouThrs = self.iou_thrs
 
@@ -522,10 +638,10 @@ class CocoMetric(BaseMetric):
                     # from https://github.com/facebookresearch/detectron2/
                     precisions = coco_eval.eval['precision']
                     # precision: (iou, recall, cls, area range, max dets)
-                    assert len(self.cat_ids) == precisions.shape[2]
+                    assert len(category_ids) == precisions.shape[2]
 
                     results_per_category = []
-                    for idx, cat_id in enumerate(self.cat_ids):
+                    for idx, cat_id in enumerate(category_ids):
                         t = []
                         # area range index 0: all area ranges
                         # max dets index -1: typically 100 per image
@@ -567,6 +683,66 @@ class CocoMetric(BaseMetric):
                     headers = [
                         'category', 'mAP', 'mAP_50', 'mAP_75', 'mAP_s',
                         'mAP_m', 'mAP_l'
+                    ]
+                    results_2d = itertools.zip_longest(*[
+                        results_flatten[i::num_columns]
+                        for i in range(num_columns)
+                    ])
+                    table_data = [headers]
+                    table_data += [result for result in results_2d]
+                    table = AsciiTable(table_data)
+                    logger.info('\n' + table.table)
+
+                if self.classwise:  # Compute per-category AR
+                    # Compute per-category AR
+                    # from https://github.com/facebookresearch/detectron2/
+                    recalls = coco_eval.eval['recall']
+                    # precision: (iou, recall, cls, area range, max dets)
+                    assert len(category_ids) == recalls.shape[1]
+
+                    results_per_category = []
+                    for idx, cat_id in enumerate(category_ids):
+                        t = []
+                        # area range index 0: all area ranges
+                        # max dets index -1: typically 100 per image
+                        nm = self._coco_api.loadCats(cat_id)[0]
+                        recall = recalls[:,  idx, 0, -1]
+                        recall = recall[recall > -1]
+                        if recall.size:
+                            ar = np.mean(recall)
+                        else:
+                            ar = float('nan')
+                        t.append(f'{nm["name"]}')
+                        t.append(f'{round(ar, 3)}')
+                        eval_results[f'{nm["name"]}_recall'] = round(ar, 3)
+
+                        # indexes of IoU  @50 and @75
+                        for iou in [0, 5]:
+                            recall = recalls[iou, idx, 0, -1]
+                            recall = recall[recall > -1]
+                            if recall.size:
+                                ar = np.mean(recall)
+                            else:
+                                ar = float('nan')
+                            t.append(f'{round(ar, 3)}')
+
+                        # indexes of area of small, median and large
+                        for area in [1, 2, 3]:
+                            recall = recalls[:, idx, area, -1]
+                            recall = recall[recall > -1]
+                            if recall.size:
+                                ar = np.mean(recall)
+                            else:
+                                ar = float('nan')
+                            t.append(f'{round(ar, 3)}')
+                        results_per_category.append(tuple(t))
+
+                    num_columns = len(results_per_category[0])
+                    results_flatten = list(
+                        itertools.chain(*results_per_category))
+                    headers = [
+                        'category', 'mAR', 'mAR_50', 'mAR_75', 'mAR_s',
+                        'mAR_m', 'mAR_l'
                     ]
                     results_2d = itertools.zip_longest(*[
                         results_flatten[i::num_columns]
