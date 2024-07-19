@@ -3,6 +3,8 @@ import copy
 import warnings
 from pathlib import Path
 from typing import Optional, Sequence, Union
+import time
+
 
 import numpy as np
 import torch
@@ -185,8 +187,13 @@ def inference_detector(
         data_['data_samples'] = [data_['data_samples']]
 
         # forward the model
+        timestamp_start = time.time()
+
         with torch.no_grad():
             results = model.test_step(data_)[0]
+
+        timestamp_end = time.time()
+        print("Time:", timestamp_end - timestamp_start)
 
         result_list.append(results)
 
@@ -195,6 +202,85 @@ def inference_detector(
     else:
         return result_list
 
+# infer images by batch
+def inference_detector_batch(
+    model: nn.Module,
+    imgs: ImagesType,
+    batch_size : int,
+    test_pipeline: Optional[Compose] = None,
+    text_prompt: Optional[str] = None,
+    custom_entities: bool = False,
+) -> Union[DetDataSample, SampleList]:
+    """Inference image(s) with the detector.
+
+    Args:
+        model (nn.Module): The loaded detector.
+        imgs (str, ndarray, Sequence[str/ndarray]):
+           Either image files or loaded images.
+        test_pipeline (:obj:`Compose`): Test pipeline.
+        batch_size (int):the size of one batch.
+
+    Returns:
+        list[:obj:`DetDataSample`]:
+        If imgs is a list or tuple, the same length list type results
+        will be returned.
+    """
+
+    if not isinstance(imgs, (list, tuple)):
+        imgs = [imgs]
+
+    cfg = model.cfg
+
+    if test_pipeline is None:
+        cfg = cfg.copy()
+        test_pipeline = get_test_pipeline_cfg(cfg)
+        if isinstance(imgs[0], np.ndarray):
+            # Calling this method across libraries will result
+            # in module unregistered error if not prefixed with mmdet.
+            test_pipeline[0].type = 'mmdet.LoadImageFromNDArray'
+
+        test_pipeline = Compose(test_pipeline)
+
+    if model.data_preprocessor.device.type == 'cpu':
+        for m in model.modules():
+            assert not isinstance(
+                m, RoIPool
+            ), 'CPU inference with RoIPool is not supported currently.'
+    results = list()
+    num_images = len(imgs)
+    batch_nums = num_images / batch_size
+    batch_nums = int(batch_nums)+1
+    for batch_index in range(batch_nums):
+        # prepare data
+        datas_batch = dict()
+        for i in range(batch_size):
+            img_index = batch_index * batch_size + i
+            if img_index >= num_images:
+                break
+            if isinstance(imgs[img_index], np.ndarray):
+                # TODO: remove img_id.
+                data_ = dict(img=imgs[img_index], img_id=img_index)
+            else:
+                # TODO: remove img_id.
+                data_ = dict(img_path=imgs[img_index], img_id=img_index)
+
+            if text_prompt:
+                data_['text'] = text_prompt
+                data_['custom_entities'] = custom_entities
+
+            # build the data pipeline
+            data_ = test_pipeline(data_)
+
+            datas_batch.setdefault('inputs', []).append(data_['inputs'])
+            datas_batch.setdefault('data_samples', []).append(data_['data_samples'])
+
+        # forward the model
+        with torch.no_grad():
+            results_batch = model.test_step(datas_batch)
+
+        results += results_batch
+
+    return results
 
 # TODO: Awaiting refactoring
 async def async_inference_detector(model, imgs):
