@@ -49,7 +49,9 @@ class PackDetInputs(BaseTransform):
 
     def __init__(self,
                  meta_keys=('img_id', 'img_path', 'ori_shape', 'img_shape',
-                            'scale_factor', 'flip', 'flip_direction')):
+                            'scale_factor', 'flip', 'flip_direction',
+                            'is_detected_image', 'is_segmented_image',
+                            'class_id'),):
         self.meta_keys = meta_keys
 
     def transform(self, results: dict) -> dict:

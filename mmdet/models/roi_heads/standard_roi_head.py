@@ -114,6 +114,7 @@ class StandardRoIHead(BaseRoIHead):
         # assign gts and sample proposals
         num_imgs = len(batch_data_samples)
         sampling_results = []
+        seg_x, seg_sampling_results, seg_batch_gt_instances = [], [], []
         for i in range(num_imgs):
             # rename rpn_results.bboxes to rpn_results.priors
             rpn_results = rpn_results_list[i]
@@ -128,6 +129,10 @@ class StandardRoIHead(BaseRoIHead):
                 batch_gt_instances[i],
                 feats=[lvl_feat[i][None] for lvl_feat in x])
             sampling_results.append(sampling_result)
+            if batch_data_samples[i].metainfo.get('is_segmented_image', False):
+                seg_x.append(i)
+                seg_sampling_results.append(sampling_result)
+                seg_batch_gt_instances.append(batch_gt_instances[i])
 
         losses = dict()
         # bbox head loss
@@ -136,10 +141,12 @@ class StandardRoIHead(BaseRoIHead):
             losses.update(bbox_results['loss_bbox'])
 
         # mask head forward and loss
-        if self.with_mask:
-            mask_results = self.mask_loss(x, sampling_results,
+        if self.with_mask and len(seg_x) > 0:
+            seg_x = tuple(x[i].index_select(0, torch.tensor(seg_x).to(x[0].device))
+                          for i in range(len(x)))
+            mask_results = self.mask_loss(seg_x, seg_sampling_results,
                                           bbox_results['bbox_feats'],
-                                          batch_gt_instances)
+                                          seg_batch_gt_instances)
             losses.update(mask_results['loss_mask'])
 
         return losses
