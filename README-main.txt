@@ -196,4 +196,7 @@ configs/swin/mask-rcnn_swin-t-p4-w7_fpn_1x_coco.py
 
 双任务：根据是否有分割+-分割头，其余与三任务同理
 
+声明：
+mask-rcnn模型训练代码 modified by @colinzhaoxp
+mask-rcnn模型验证,预测代码 modified by @SDUzry
 
